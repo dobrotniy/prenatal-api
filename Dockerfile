@@ -2,6 +2,8 @@ FROM rocker/rstudio:4.3.1
 
 WORKDIR /app
 
+COPY . /app
+
 RUN apt-get update && apt-get install -y \
     libssl-dev \
     libcurl4-openssl-dev \
@@ -9,7 +11,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN R -e "install.packages(c('plumber','gigs','jsonlite'), repos='https://cloud.r-project.org')"
 
-COPY . /app
 
 EXPOSE 8000
 
