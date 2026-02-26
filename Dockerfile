@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libcurl4-openssl-dev \
     libxml2-dev
-    lib sodium-dev \
+    libsodium-dev \
     zlib1g-dev \
     build-essential
 
