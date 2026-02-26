@@ -8,11 +8,13 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     build-essential
 
-# Сначала ставим CRAN-пакеты
-RUN R -e "install.packages(c('plumber','jsonlite','remotes'), repos='https://cloud.r-project.org')"
-
-# Потом ставим gigs из GitHub
-RUN R -e "remotes::install_github('ropensci/gigs')"
+RUN R -e "install.packages( \
+    c('plumber','gigs'), \
+    repos = c( \
+      rOpenSci = 'https://ropensci.r-universe.dev', \
+      CRAN = 'https://cloud.r-project.org' \
+    ) \
+)"
 
 WORKDIR /app
 COPY . /app
