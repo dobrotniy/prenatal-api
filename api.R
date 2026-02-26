@@ -1,61 +1,98 @@
-#* Calculate fetal biometric percentile (INTERGROWTH-21st Fetal Standards)
-#* @post /percentile
+#* Fetal biometry analysis (INTERGROWTH-21st + Hadlock-3)
+#* @post /analyze
 #* @param ga:integer Gestational age in weeks
-#* @param param:string One of BPD, HC, AC, FL, EFW
-#* @param value:numeric Measurement value (mm for biometry, g for EFW)
+#* @param bpd:numeric Biparietal diameter (mm)
+#* @param hc:numeric Head circumference (mm)
+#* @param ac:numeric Abdominal circumference (mm)
+#* @param fl:numeric Femur length (mm)
 #* @serializer json
-function(ga, param, value) {
+function(ga, bpd = NA, hc = NA, ac = NA, fl = NA) {
 
   library(gigs)
 
   ga_days <- as.numeric(ga) * 7
-  param <- toupper(param)
 
-  map <- list(
-    BPD = list(acronym="bpdfga", min=98,  max=280),
-    HC  = list(acronym="hcfga",  min=98,  max=280),
-    AC  = list(acronym="acfga",  min=98,  max=280),
-    FL  = list(acronym="flfga",  min=98,  max=280),
-    EFW = list(acronym="hefwfga", min=126, max=287)
-  )
-
-  if (is.null(map[[param]])) {
-    stop("Invalid parameter. Use BPD, HC, AC, FL or EFW.")
+  if (ga_days < 98 || ga_days > 287) {
+    stop("GA outside INTERGROWTH fetal range (98–287 days)")
   }
 
-  acronym <- map[[param]]$acronym
-  min_days <- map[[param]]$min
-  max_days <- map[[param]]$max
-
-  if (ga_days < min_days || ga_days > max_days) {
-    stop(
-      paste0(
-        "GA out of INTERGROWTH range for ", param,
-        " (", min_days, "–", max_days, " days)"
-      )
+  result <- list()
+  calc_param <- function(value, acronym) {
+    list(
+      percentile = round(
+        gigs::value2centile(
+          y = value,
+          x = ga_days,
+          family = "ig_fet",
+          acronym = acronym
+        ) * 100, 2),
+      zscore = round(
+        gigs::value2zscore(
+          y = value,
+          x = ga_days,
+          family = "ig_fet",
+          acronym = acronym
+        ), 3)
     )
   }
 
-  cent <- gigs::value2centile(
-    y = as.numeric(value),
-    x = ga_days,
-    family = "ig_fet",
-    acronym = acronym
-  )
+  # --- BPD ---
+  if (!is.na(bpd)) {
+    result$bpd <- calc_param(as.numeric(bpd), "bpdfga")
+  }
 
-  z <- gigs::value2zscore(
-    y = as.numeric(value),
-    x = ga_days,
-    family = "ig_fet",
-    acronym = acronym
-  )
+  # --- HC ---
+  if (!is.na(hc)) {
+    result$hc <- calc_param(as.numeric(hc), "hcfga")
+  }
 
-  list(
-    parameter = param,
-    ga_weeks = ga,
-    ga_days = ga_days,
-    value = value,
-    percentile = round(cent * 100, 2),
-    zscore = round(z, 3)
-  )
+  # --- AC ---
+  if (!is.na(ac)) {
+    result$ac <- calc_param(as.numeric(ac), "acfga")
+  }
+
+  # --- FL ---
+  if (!is.na(fl)) {
+    result$fl <- calc_param(as.numeric(fl), "flfga")
+  }
+
+  # --- EFW (Hadlock-3) ---
+  if (!is.na(hc) && !is.na(ac) && !is.na(fl)) {
+
+    # перевод в сантиметры
+    hc_cm <- as.numeric(hc) / 10
+    ac_cm <- as.numeric(ac) / 10
+    fl_cm <- as.numeric(fl) / 10
+
+    log10_efw <- 1.326 +
+      0.0107 * hc_cm +
+      0.0438 * ac_cm +
+      0.158 * fl_cm -
+      0.00326 * ac_cm * fl_cm
+
+    efw <- 10^log10_efw
+
+    result$efw <- list(
+      value = round(efw, 0),
+      percentile = round(
+        gigs::value2centile(
+          y = efw,
+          x = ga_days,
+          family = "ig_fet",
+          acronym = "hefwfga"
+        ) * 100, 2),
+      zscore = round(
+        gigs::value2zscore(
+          y = efw,
+          x = ga_days,
+          family = "ig_fet",
+          acronym = "hefwfga"
+        ), 3)
+    )
+  }
+
+  result$ga_weeks <- ga
+  result$ga_days <- ga_days
+
+  return(result)
 }
