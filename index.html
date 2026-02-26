@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+body{
+  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  background:#ffffff;
+  padding:24px;
+  max-width:480px;
+  margin:auto;
+  color:#222;
+}
+h1{
+  font-size:20px;
+  font-weight:500;
+  margin-bottom:24px;
+}
+.section{margin-bottom:28px;}
+label{
+  font-size:12px;
+  text-transform:uppercase;
+  color:#777;
+  display:block;
+  margin-bottom:6px;
+}
+input{
+  width:100%;
+  border:none;
+  border-bottom:1px solid #ccc;
+  padding:8px 4px;
+  font-size:16px;
+  outline:none;
+}
+input:focus{
+  border-bottom:1px solid #000;
+}
+.result{
+  margin-top:4px;
+  padding:6px;
+  font-size:14px;
+}
+.red{background:#ff4d4f;}
+.yellow{background:#fff176;}
+.orange{background:#ffb74d;}
+.divider{
+  height:1px;
+  background:#eee;
+  margin:24px 0;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Prenatal Biometry</h1>
+
+<div class="section">
+<label>Gestational Age</label>
+<input id="weeks" type="number" placeholder="Weeks">
+<input id="days" type="number" placeholder="Days (0–6)" min="0" max="6" step="1">
+</div>
+
+<div class="divider"></div>
+
+<div class="section">
+<label>BPD (mm)</label>
+<input id="bpd">
+<div id="bpd_res" class="result"></div>
+</div>
+
+<div class="section">
+<label>HC (mm)</label>
+<input id="hc">
+<div id="hc_res" class="result"></div>
+</div>
+
+<div class="section">
+<label>AC (mm)</label>
+<input id="ac">
+<div id="ac_res" class="result"></div>
+</div>
+
+<div class="section">
+<label>FL (mm)</label>
+<input id="fl">
+<div id="fl_res" class="result"></div>
+</div>
+
+<div class="divider"></div>
+
+<div class="section">
+<label>EFW (Hadlock-3)</label>
+<input id="efw" readonly>
+<div id="efw_res" class="result"></div>
+</div>
+
+<div class="section">
+<label>Or enter EFW manually</label>
+<input id="efw_manual">
+<div id="efw_manual_res" class="result"></div>
+</div>
+
+<script>
+
+const apiURL = "https://prenatal-api.onrender.com/analyze";
+
+/* ---- Ограничение дней 0–6 ---- */
+days.addEventListener("input", function(){
+  let value = parseInt(this.value);
+  if (isNaN(value)) return;
+  if (value < 0) this.value = 0;
+  if (value > 6) this.value = 6;
+});
+
+/* ---- Проверка валидности GA ---- */
+function gaValid(){
+  const w = parseInt(weeks.value);
+  const d = parseInt(days.value);
+  return !isNaN(w) && !isNaN(d);
+}
+
+/* ---- Основной анализ ---- */
+async function analyze(){
+
+  if(!gaValid()) return;
+
+  const payload = {
+    ga_weeks: parseInt(weeks.value),
+    ga_days: parseInt(days.value) || 0
+  };
+
+  if(bpd.value) payload.bpd = parseFloat(bpd.value);
+  if(hc.value)  payload.hc  = parseFloat(hc.value);
+  if(ac.value)  payload.ac  = parseFloat(ac.value);
+  if(fl.value)  payload.fl  = parseFloat(fl.value);
+
+  const response = await fetch(apiURL,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+
+  function paint(box, percentile){
+    box.className="result";
+    if(percentile < 3) box.classList.add("red");
+    else if(percentile < 10) box.classList.add("yellow");
+    else if(percentile > 90) box.classList.add("orange");
+    box.innerText = percentile + " percentile";
+  }
+
+  if(data.bpd) paint(bpd_res, data.bpd.percentile);
+  else bpd_res.innerText = "";
+
+  if(data.hc) paint(hc_res, data.hc.percentile);
+  else hc_res.innerText = "";
+
+  if(data.ac) paint(ac_res, data.ac.percentile);
+  else ac_res.innerText = "";
+
+  if(data.fl) paint(fl_res, data.fl.percentile);
+  else fl_res.innerText = "";
+
+  if(data.efw){
+    efw.value = data.efw.value;
+    paint(efw_res, data.efw.percentile);
+  } else {
+    efw.value = "";
+    efw_res.innerText = "";
+  }
+}
+
+/* ---- Debounce 300 мс ---- */
+let timeout = null;
+
+function debounceAnalyze(){
+  clearTimeout(timeout);
+  timeout = setTimeout(analyze, 300);
+}
+
+document.querySelectorAll("input")
+  .forEach(i => i.addEventListener("input", debounceAnalyze));
+
+/* ---- Переход по Enter ---- */
+const fields = [
+  weeks,
+  days,
+  bpd,
+  hc,
+  ac,
+  fl,
+  efw_manual
+];
+
+fields.forEach((field, index) => {
+  field.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (fields[index + 1]) {
+        fields[index + 1].focus();
+      }
+    }
+  });
+});
+
+</script>
+</body>
+</html>
