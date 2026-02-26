@@ -1,3 +1,15 @@
+#* @filter cors
+function(req, res){
+  res$setHeader("Access-Control-Allow-Origin", "*")
+  res$setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+  res$setHeader("Access-Control-Allow-Headers", "Content-Type")
+  if (req$REQUEST_METHOD == "OPTIONS") {
+    res$status <- 200
+    return(list())
+  }
+  plumber::forward()
+}
+
 #* Fetal biometry analysis (INTERGROWTH-21st + Hadlock-3)
 #* @post /analyze
 #* @param ga_weeks:integer Gestational age (weeks)
