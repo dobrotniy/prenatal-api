@@ -18,6 +18,7 @@ function(req, res){
 #* @param hc:numeric Head circumference (mm)
 #* @param ac:numeric Abdominal circumference (mm)
 #* @param fl:numeric Femur length (mm)
+#* @param efw_manual:numeric Estimated fetal weight manually entered (g)
 #* @serializer json
 function(ga_weeks, ga_days = 0, bpd = NA, hc = NA, ac = NA, fl = NA, efw_manual = NA) {
 
@@ -121,30 +122,36 @@ function(ga_weeks, ga_days = 0, bpd = NA, hc = NA, ac = NA, fl = NA, efw_manual 
   }
 
   # --- Manual EFW (126–287) ---
-  if (!is.na(efw_manual)) {
+  if (!is.null(efw_manual) && !is.na(efw_manual) && efw_manual != "") {
 
-  if (ga_total_days < 126 || ga_total_days > 287) {
+    efw_manual_num <- suppressWarnings(as.numeric(efw_manual))
+
+    if (is.na(efw_manual_num)) {
+    stop("Invalid EFW manual value")
+    }
+
+    if (ga_total_days < 126 || ga_total_days > 287) {
     stop("EFW valid only between 126–287 days GA")
-  }
+    }
 
-  result$efw_manual <- list(
-    value = as.numeric(efw_manual),
-    percentile = round(
-      gigs::value2centile(
-        y = as.numeric(efw_manual),
-        x = ga_total_days,
-        family = "ig_fet",
-        acronym = "hefwfga"
-      ) * 100, 2),
-    zscore = round(
-      gigs::value2zscore(
-        y = as.numeric(efw_manual),
-        x = ga_total_days,
-        family = "ig_fet",
-        acronym = "hefwfga"
-      ), 3)
-  )
-}
+    result$efw_manual <- list(
+      value = efw_manual_num,
+      percentile = round(
+        gigs::value2centile(
+          y = efw_manual_num,
+          x = ga_total_days,
+          family = "ig_fet",
+          acronym = "hefwfga"
+        ) * 100, 2),
+      zscore = round(
+        gigs::value2zscore(
+          y = efw_manual_num,
+          x = ga_total_days,
+          family = "ig_fet",
+          acronym = "hefwfga"
+        ), 3)
+    )
+  }
   result$ga_weeks <- ga_weeks
   result$ga_days <- ga_days
   result$ga_total_days <- ga_total_days
