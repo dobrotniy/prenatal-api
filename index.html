@@ -6,51 +6,111 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
+
+/* ===== FMF palette ===== */
+:root{
+  --fmf-blue:#1e3a8a;
+  --fmf-light:#eaf2ff;
+  --fmf-border:#dbeafe;
+  --path-red:#dc2626;
+  --path-yellow:#ca8a04;
+  --path-orange:#ea580c;
+  --text-soft:#6b7280;
+}
+
 body{
   font-family:-apple-system,BlinkMacSystemFont,sans-serif;
   background:#ffffff;
   padding:24px;
-  max-width:480px;
+  max-width:520px;
   margin:auto;
-  color:#222;
+  color:#1f2937;
 }
+
 h1{
   font-size:20px;
-  font-weight:500;
-  margin-bottom:24px;
+  font-weight:600;
+  margin-bottom:28px;
+  color:var(--fmf-blue);
 }
-.section{margin-bottom:28px;}
+
+.section{margin-bottom:26px;}
+
 label{
   font-size:12px;
   text-transform:uppercase;
-  color:#777;
+  color:var(--text-soft);
   display:block;
   margin-bottom:6px;
+  letter-spacing:0.5px;
 }
-input{
-  width:100%;
+
+/* ===== Flex row ===== */
+.row{
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.row input{
+  flex:1;
   border:none;
-  border-bottom:1px solid #ccc;
+  border-bottom:1px solid var(--fmf-border);
   padding:8px 4px;
   font-size:16px;
+  background:white;
   outline:none;
+  transition:0.2s;
 }
-input:focus{
-  border-bottom:1px solid #000;
+
+.row input:focus{
+  border-bottom:2px solid var(--fmf-blue);
 }
+
+/* ===== Percentile ===== */
 .result{
-  margin-top:4px;
-  padding:6px;
+  min-width:150px;
+  text-align:right;
   font-size:14px;
+  font-weight:500;
+  color:var(--text-soft);
+  position:relative;
 }
-.red{background:#ff4d4f;}
-.yellow{background:#fff176;}
-.orange{background:#ffb74d;}
+
+/* Pathological coloring only */
+.result.red{ color:var(--path-red); }
+.result.yellow{ color:var(--path-yellow); }
+.result.orange{ color:var(--path-orange); }
+
+/* ===== Hover z-score tooltip ===== */
+.result::after{
+  content:attr(data-z);
+  position:absolute;
+  right:0;
+  top:120%;
+  background:var(--fmf-blue);
+  color:white;
+  font-size:12px;
+  padding:4px 8px;
+  border-radius:4px;
+  white-space:nowrap;
+  opacity:0;
+  transform:translateY(-4px);
+  transition:0.2s;
+  pointer-events:none;
+}
+
+.result:hover::after{
+  opacity:1;
+  transform:translateY(0);
+}
+
 .divider{
   height:1px;
-  background:#eee;
-  margin:24px 0;
+  background:var(--fmf-border);
+  margin:28px 0;
 }
+
 </style>
 </head>
 
@@ -60,55 +120,69 @@ input:focus{
 
 <div class="section">
 <label>Gestational Age</label>
+<div class="row">
 <input id="weeks" type="number" placeholder="Weeks">
 <input id="days" type="number" placeholder="Days (0–6)" min="0" max="6" step="1">
+</div>
 </div>
 
 <div class="divider"></div>
 
 <div class="section">
 <label>BPD (mm)</label>
+<div class="row">
 <input id="bpd">
 <div id="bpd_res" class="result"></div>
+</div>
 </div>
 
 <div class="section">
 <label>HC (mm)</label>
+<div class="row">
 <input id="hc">
 <div id="hc_res" class="result"></div>
+</div>
 </div>
 
 <div class="section">
 <label>AC (mm)</label>
+<div class="row">
 <input id="ac">
 <div id="ac_res" class="result"></div>
+</div>
 </div>
 
 <div class="section">
 <label>FL (mm)</label>
+<div class="row">
 <input id="fl">
 <div id="fl_res" class="result"></div>
+</div>
 </div>
 
 <div class="divider"></div>
 
 <div class="section">
 <label>EFW (Hadlock-3)</label>
+<div class="row">
 <input id="efw" readonly>
 <div id="efw_res" class="result"></div>
+</div>
 </div>
 
 <div class="section">
 <label>Or enter EFW manually</label>
+<div class="row">
 <input id="efw_manual">
 <div id="efw_manual_res" class="result"></div>
+</div>
 </div>
 
 <script>
 
 const apiURL = "https://prenatal-api.onrender.com/analyze";
 
-/* ---- Ограничение дней 0–6 ---- */
+/* ---- Ограничение дней ---- */
 days.addEventListener("input", function(){
   let value = parseInt(this.value);
   if (isNaN(value)) return;
@@ -116,7 +190,7 @@ days.addEventListener("input", function(){
   if (value > 6) this.value = 6;
 });
 
-/* ---- Проверка валидности GA ---- */
+/* ---- Проверка GA ---- */
 function gaValid(){
   const w = parseInt(weeks.value);
   const d = parseInt(days.value);
@@ -137,6 +211,7 @@ async function analyze(){
   if(hc.value)  payload.hc  = parseFloat(hc.value);
   if(ac.value)  payload.ac  = parseFloat(ac.value);
   if(fl.value)  payload.fl  = parseFloat(fl.value);
+  if(efw_manual.value) payload.efw_manual = parseFloat(efw_manual.value);
 
   const response = await fetch(apiURL,{
     method:"POST",
@@ -144,68 +219,92 @@ async function analyze(){
     body:JSON.stringify(payload)
   });
 
-  const data = await response.json();
-
-  function paint(box, percentile){
-    box.className="result";
-    if(percentile < 3) box.classList.add("red");
-    else if(percentile < 10) box.classList.add("yellow");
-    else if(percentile > 90) box.classList.add("orange");
-    box.innerText = percentile + " percentile";
+  if(!response.ok){
+    console.log("API not ready, retrying...");
+    setTimeout(analyze, 1500);
+    return;
   }
 
-  if(data.bpd) paint(bpd_res, data.bpd.percentile);
-  else bpd_res.innerText = "";
+  const data = await response.json();
 
-  if(data.hc) paint(hc_res, data.hc.percentile);
-  else hc_res.innerText = "";
+  function paint(box, percentile, zscore){
+    box.className="result";
 
-  if(data.ac) paint(ac_res, data.ac.percentile);
-  else ac_res.innerText = "";
+    if(percentile < 3){
+      box.classList.add("red");
+    }
+    else if(percentile < 10){
+      box.classList.add("yellow");
+    }
+    else if(percentile > 90){
+      box.classList.add("orange");
+    }
 
-  if(data.fl) paint(fl_res, data.fl.percentile);
-  else fl_res.innerText = "";
+    box.innerText = percentile + " percentile";
+    box.setAttribute("data-z", "z-score: " + zscore);
+  }
+
+  if(data.bpd) paint(bpd_res, data.bpd.percentile, data.bpd.zscore);
+  else bpd_res.innerText="";
+
+  if(data.hc) paint(hc_res, data.hc.percentile, data.hc.zscore);
+  else hc_res.innerText="";
+
+  if(data.ac) paint(ac_res, data.ac.percentile, data.ac.zscore);
+  else ac_res.innerText="";
+
+  if(data.fl) paint(fl_res, data.fl.percentile, data.fl.zscore);
+  else fl_res.innerText="";
 
   if(data.efw){
     efw.value = data.efw.value;
-    paint(efw_res, data.efw.percentile);
+    paint(efw_res, data.efw.percentile, data.efw.zscore);
   } else {
-    efw.value = "";
-    efw_res.innerText = "";
+    efw.value="";
+    efw_res.innerText="";
+  }
+
+  if(data.efw_manual){
+    paint(efw_manual_res, data.efw_manual.percentile, data.efw_manual.zscore);
+  } else {
+    efw_manual_res.innerText="";
   }
 }
 
-/* ---- Debounce 300 мс ---- */
-let timeout = null;
-
+/* ---- Debounce ---- */
+let timeout=null;
 function debounceAnalyze(){
   clearTimeout(timeout);
-  timeout = setTimeout(analyze, 300);
+  timeout=setTimeout(analyze,300);
 }
 
 document.querySelectorAll("input")
-  .forEach(i => i.addEventListener("input", debounceAnalyze));
+  .forEach(i=>i.addEventListener("input",debounceAnalyze));
 
-/* ---- Переход по Enter ---- */
-const fields = [
-  weeks,
-  days,
-  bpd,
-  hc,
-  ac,
-  fl,
-  efw_manual
-];
+/* ---- Enter navigation ---- */
+const fields=[weeks,days,bpd,hc,ac,fl,efw_manual];
 
-fields.forEach((field, index) => {
-  field.addEventListener("keydown", function(e) {
-    if (e.key === "Enter") {
+fields.forEach((field,index)=>{
+  field.addEventListener("keydown",function(e){
+    if(e.key==="Enter"){
       e.preventDefault();
-      if (fields[index + 1]) {
-        fields[index + 1].focus();
-      }
+      if(fields[index+1]) fields[index+1].focus();
     }
   });
+});
+
+/* --- Pre-warm API on page load --- */
+window.addEventListener("load", async () => {
+  try {
+    await fetch(apiURL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringfy({
+        ga_weeks: 20,
+        ga_days: 0
+      })
+    });
+  } catch (e) {}
 });
 
 </script>
