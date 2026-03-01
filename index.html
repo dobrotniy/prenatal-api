@@ -319,12 +319,16 @@ if(efwValue){
   efw_res.innerText="";
 }
 
-  if(efw_manual.value){
-    const z=zEFW(parseFloat(efw_manual.value),g);
-    paint(efw_manual_res,percentile(z),z);
-  }else{
-    efw_manual_res.innerText="";
-  }
+  const manualValue = parseFloat(efw_manual.value);
+
+if(!isNaN(manualValue) && manualValue > 0){
+
+  const z = zEFW(manualValue, g);
+  paint(efw_manual_res, percentile(z), z);
+
+}else{
+  efw_manual_res.innerText="";
+}
 }
 
 days.addEventListener("input",()=>{
