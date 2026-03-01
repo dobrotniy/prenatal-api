@@ -253,15 +253,18 @@ function sigmaEFW(g){
 }
 
 function zEFW(efw,g){
-  const L=lambdaEFW(g);
-  const M=muEFW(g);
-  const S=sigmaEFW(g);
-  const Y=Math.log(efw);
 
-  if(Math.abs(L)<1e-6)
-    return (1/S)*Math.log(Y/M);
+  const L = lambdaEFW(g);
+  const M = muEFW(g);
+  const S = sigmaEFW(g);
 
-  return (1/(S*L))*((Y/M)**L-1);
+  const Y = Math.log(efw);
+
+  if(Math.abs(L) < 1e-6){
+    return (Y - M) / S;
+  }
+
+  return (Math.pow((Y - M)/S * L + 1, 1/L) - 1) / L;
 }
 
 /* ===============================
@@ -299,20 +302,22 @@ function analyze(){
   compute(parseFloat(ac.value),meanAC,sdAC,ac_res);
   compute(parseFloat(fl.value),meanFL,sdFL,fl_res);
 
-  const efwValue=hadlock3(
-    parseFloat(bpd.value),
-    parseFloat(ac.value),
-    parseFloat(fl.value)
-  );
+const efwValue = calculateEFW_Hadlock3(
+  parseFloat(bpd.value),
+  parseFloat(ac.value),
+  parseFloat(fl.value)
+);
 
-  if(efwValue){
-    efw.value=efwValue;
-    const z=zEFW(efwValue,g);
-    paint(efw_res,percentile(z),z);
-  }else{
-    efw.value="";
-    efw_res.innerText="";
-  }
+if(efwValue){
+  efw.value = efwValue.toFixed(0);
+
+  const z = zEFW(efwValue, g);
+  paint(efw_res, percentile(z), z);
+
+}else{
+  efw.value="";
+  efw_res.innerText="";
+}
 
   if(efw_manual.value){
     const z=zEFW(parseFloat(efw_manual.value),g);
