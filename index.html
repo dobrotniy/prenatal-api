@@ -214,24 +214,24 @@ function sdFL(g){ return Math.exp(0.605843-42.0014*g**(-2)+0.00000917972*g**3); 
    HADLOCK-3
    =============================== */
 
-function calculateEFW_Hadlock3(BPD, AC, FL) {
+function calculateEFW_Hadlock3(HC, AC, FL) {
 
-  if(!BPD || !AC || !FL) return null;
+  if(!HC || !AC || !FL) return null;
 
-  const BPDcm = BPD / 10;
-  const ACcm  = AC  / 10;
-  const FLcm  = FL  / 10;
+  const HCcm = HC / 10;
+  const ACcm = AC / 10;
+  const FLcm = FL / 10;
 
   const log10EFW =
-      1.335
-    - 0.0034 * ACcm * FLcm
-    + 0.0316 * BPDcm
-    + 0.0457 * ACcm
-    + 0.1623 * FLcm;
+      1.326
+    - 0.00326 * ACcm * FLcm
+    + 0.0107 * HCcm
+    + 0.0438 * ACcm
+    + 0.158  * FLcm;
 
   const EFW = Math.pow(10, log10EFW);
 
-  return EFW;
+  return +EFW.toFixed(0);
 }
 
 /* ===============================
@@ -303,7 +303,7 @@ function analyze(){
   compute(parseFloat(fl.value),meanFL,sdFL,fl_res);
 
 const efwValue = calculateEFW_Hadlock3(
-  parseFloat(bpd.value),
+  parseFloat(hc.value),
   parseFloat(ac.value),
   parseFloat(fl.value)
 );
@@ -322,8 +322,8 @@ if(efwValue){
   const manualValue = parseFloat(efw_manual.value);
 
 if(!isNaN(manualValue) && manualValue > 0){
-
-  const z = zEFW(manualValue, g);
+  
+const z = zEFW(manualValue, g);
   paint(efw_manual_res, percentile(z), z);
 
 }else{
