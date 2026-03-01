@@ -214,10 +214,24 @@ function sdFL(g){ return Math.exp(0.605843-42.0014*g**(-2)+0.00000917972*g**3); 
    HADLOCK-3
    =============================== */
 
-function hadlock3(bpd,ac,fl){
-  if(!bpd||!ac||!fl) return null;
-  const logEFW=1.335-0.0034*ac*fl+0.0316*bpd+0.0457*ac+0.1623*fl;
-  return Math.round(10**logEFW);
+function calculateEFW_Hadlock3(BPD, AC, FL) {
+
+  if(!BPD || !AC || !FL) return null;
+
+  const BPDcm = BPD / 10;
+  const ACcm  = AC  / 10;
+  const FLcm  = FL  / 10;
+
+  const log10EFW =
+      1.335
+    - 0.0034 * ACcm * FLcm
+    + 0.0316 * BPDcm
+    + 0.0457 * ACcm
+    + 0.1623 * FLcm;
+
+  const EFW = Math.pow(10, log10EFW);
+
+  return EFW;
 }
 
 /* ===============================
