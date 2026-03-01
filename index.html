@@ -7,7 +7,6 @@
 
 <style>
 
-/* ===== FMF palette ===== */
 :root{
   --fmf-blue:#1e3a8a;
   --fmf-light:#eaf2ff;
@@ -45,7 +44,6 @@ label{
   letter-spacing:0.5px;
 }
 
-/* ===== Flex row ===== */
 .row{
   display:flex;
   align-items:center;
@@ -67,7 +65,6 @@ label{
   border-bottom:2px solid var(--fmf-blue);
 }
 
-/* ===== Percentile ===== */
 .result{
   min-width:150px;
   text-align:right;
@@ -77,12 +74,10 @@ label{
   position:relative;
 }
 
-/* Pathological coloring only */
 .result.red{ color:var(--path-red); }
 .result.yellow{ color:var(--path-yellow); }
 .result.orange{ color:var(--path-orange); }
 
-/* ===== Hover z-score tooltip ===== */
 .result::after{
   content:attr(data-z);
   position:absolute;
@@ -122,7 +117,7 @@ label{
 <label>Gestational Age</label>
 <div class="row">
 <input id="weeks" type="number" placeholder="Weeks">
-<input id="days" type="number" placeholder="Days (0–6)" min="0" max="6" step="1">
+<input id="days" type="number" placeholder="Days (0–6)" min="0" max="6">
 </div>
 </div>
 
@@ -180,133 +175,154 @@ label{
 
 <script>
 
-const apiURL = "https://prenatal-api.onrender.com/analyze";
+/* ===============================
+   CORE MATH
+   =============================== */
 
-/* ---- Ограничение дней ---- */
-days.addEventListener("input", function(){
-  let value = parseInt(this.value);
-  if (isNaN(value)) return;
-  if (value < 0) this.value = 0;
-  if (value > 6) this.value = 6;
-});
+function gaInWeeks(w,d){ return w + d/7; }
 
-/* ---- Проверка GA ---- */
-function gaValid(){
-  const w = parseInt(weeks.value);
-  const d = parseInt(days.value);
-  return !isNaN(w) && !isNaN(d);
+function erf(x){
+  const sign=x>=0?1:-1;
+  x=Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741;
+  const a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const t=1/(1+p*x);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
 }
 
-/* ---- Основной анализ ---- */
-async function analyze(){
+function normalCDF(z){ return 0.5*(1+erf(z/Math.SQRT2)); }
+function percentile(z){ return +(normalCDF(z)*100).toFixed(2); }
 
-  if(!gaValid()) return;
+/* ===============================
+   BIOMETRY (Normal model)
+   =============================== */
 
-  const payload = {
-    ga_weeks: parseInt(weeks.value),
-    ga_days: parseInt(days.value) || 0
-  };
+function meanHC(g){ return -28.2849+1.69267*g**2-0.397485*g**2*Math.log(g); }
+function sdHC(g){ return 1.98735+0.0136772*g**3-0.00726264*g**3*Math.log(g)+0.000976253*g**3*Math.log(g)**2; }
 
-  if(bpd.value) payload.bpd = parseFloat(bpd.value);
-  if(hc.value)  payload.hc  = parseFloat(hc.value);
-  if(ac.value)  payload.ac  = parseFloat(ac.value);
-  if(fl.value)  payload.fl  = parseFloat(fl.value);
-  if(efw_manual.value) payload.efw_manual = parseFloat(efw_manual.value);
+function meanBPD(g){ return 5.60878+0.158369*g**2-0.00256379*g**3; }
+function sdBPD(g){ return Math.exp(0.101242+0.00150557*g**3-0.000771535*g**3*Math.log(g)+0.0000999638*g**3*Math.log(g)**2); }
 
-  const response = await fetch(apiURL,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(payload)
-  });
+function meanAC(g){ return -81.3243+11.6772*g-0.000561865*g**3; }
+function sdAC(g){ return -4.36302+0.121445*g**2-0.0130256*g**3+0.00282143*g**3*Math.log(g); }
 
-  if(!response.ok){
-    console.log("API not ready, retrying...");
-    setTimeout(analyze, 1500);
-    return;
+function meanFL(g){ return -39.9616+4.32298*g-0.0380156*g**2; }
+function sdFL(g){ return Math.exp(0.605843-42.0014*g**(-2)+0.00000917972*g**3); }
+
+/* ===============================
+   HADLOCK-3
+   =============================== */
+
+function hadlock3(bpd,ac,fl){
+  if(!bpd||!ac||!fl) return null;
+  const logEFW=1.335-0.0034*ac*fl+0.0316*bpd+0.0457*ac+0.1623*fl;
+  return Math.round(10**logEFW);
+}
+
+/* ===============================
+   INTERGROWTH EFW (LMS)
+   =============================== */
+
+function lambdaEFW(g){
+  const x=g/10;
+  return 9.43643+9.41579*x**(-2)-83.54220*Math.log(x)*x**(-2);
+}
+
+function muEFW(g){
+  return -2.42272+1.86478*Math.sqrt(g)-1.93299e-5*g**3;
+}
+
+function sigmaEFW(g){
+  const x=g/10;
+  return 0.0193557+0.0310716*x**(-2)-0.0657587*Math.log(x)*x**(-2);
+}
+
+function zEFW(efw,g){
+  const L=lambdaEFW(g);
+  const M=muEFW(g);
+  const S=sigmaEFW(g);
+  const Y=Math.log(efw);
+
+  if(Math.abs(L)<1e-6)
+    return (1/S)*Math.log(Y/M);
+
+  return (1/(S*L))*((Y/M)**L-1);
+}
+
+/* ===============================
+   UI
+   =============================== */
+
+function paint(box,p,z){
+  box.className="result";
+  if(p<3) box.classList.add("red");
+  else if(p<10) box.classList.add("yellow");
+  else if(p>90) box.classList.add("orange");
+  box.innerText=p+" percentile";
+  box.setAttribute("data-z","z-score: "+z.toFixed(2));
+}
+
+function analyze(){
+
+  const w=parseInt(weeks.value);
+  const d=parseInt(days.value)||0;
+  if(isNaN(w)||isNaN(d)) return;
+
+  const g=gaInWeeks(w,d);
+
+  function compute(val,meanFn,sdFn,res){
+    if(!val){res.innerText="";return;}
+    const m=meanFn(g);
+    const sd=sdFn(g);
+    const z=(val-m)/sd;
+    const p=percentile(z);
+    paint(res,p,z);
   }
 
-  const data = await response.json();
+  compute(parseFloat(bpd.value),meanBPD,sdBPD,bpd_res);
+  compute(parseFloat(hc.value),meanHC,sdHC,hc_res);
+  compute(parseFloat(ac.value),meanAC,sdAC,ac_res);
+  compute(parseFloat(fl.value),meanFL,sdFL,fl_res);
 
-  function paint(box, percentile, zscore){
-    box.className="result";
+  const efwValue=hadlock3(
+    parseFloat(bpd.value),
+    parseFloat(ac.value),
+    parseFloat(fl.value)
+  );
 
-    if(percentile < 3){
-      box.classList.add("red");
-    }
-    else if(percentile < 10){
-      box.classList.add("yellow");
-    }
-    else if(percentile > 90){
-      box.classList.add("orange");
-    }
-
-    box.innerText = percentile + " percentile";
-    box.setAttribute("data-z", "z-score: " + zscore);
-  }
-
-  if(data.bpd) paint(bpd_res, data.bpd.percentile, data.bpd.zscore);
-  else bpd_res.innerText="";
-
-  if(data.hc) paint(hc_res, data.hc.percentile, data.hc.zscore);
-  else hc_res.innerText="";
-
-  if(data.ac) paint(ac_res, data.ac.percentile, data.ac.zscore);
-  else ac_res.innerText="";
-
-  if(data.fl) paint(fl_res, data.fl.percentile, data.fl.zscore);
-  else fl_res.innerText="";
-
-  if(data.efw){
-    efw.value = data.efw.value;
-    paint(efw_res, data.efw.percentile, data.efw.zscore);
-  } else {
+  if(efwValue){
+    efw.value=efwValue;
+    const z=zEFW(efwValue,g);
+    paint(efw_res,percentile(z),z);
+  }else{
     efw.value="";
     efw_res.innerText="";
   }
 
-  if(data.efw_manual){
-    paint(efw_manual_res, data.efw_manual.percentile, data.efw_manual.zscore);
-  } else {
+  if(efw_manual.value){
+    const z=zEFW(parseFloat(efw_manual.value),g);
+    paint(efw_manual_res,percentile(z),z);
+  }else{
     efw_manual_res.innerText="";
   }
 }
 
-/* ---- Debounce ---- */
+days.addEventListener("input",()=>{
+  if(days.value<0)days.value=0;
+  if(days.value>6)days.value=6;
+});
+
 let timeout=null;
-function debounceAnalyze(){
+function debounce(){
   clearTimeout(timeout);
-  timeout=setTimeout(analyze,300);
+  timeout=setTimeout(analyze,200);
 }
 
 document.querySelectorAll("input")
-  .forEach(i=>i.addEventListener("input",debounceAnalyze));
-
-/* ---- Enter navigation ---- */
-const fields=[weeks,days,bpd,hc,ac,fl,efw_manual];
-
-fields.forEach((field,index)=>{
-  field.addEventListener("keydown",function(e){
-    if(e.key==="Enter"){
-      e.preventDefault();
-      if(fields[index+1]) fields[index+1].focus();
-    }
-  });
-});
-
-/* --- Pre-warm API on page load --- */
-window.addEventListener("load", async () => {
-  try {
-    await fetch(apiURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringfy({
-        ga_weeks: 20,
-        ga_days: 0
-      })
-    });
-  } catch (e) {}
-});
+  .forEach(i=>i.addEventListener("input",debounce));
 
 </script>
+
 </body>
 </html>
