@@ -252,7 +252,9 @@ function sigmaEFW(g){
   return 0.0193557+0.0310716*x**(-2)-0.0657587*Math.log(x)*x**(-2);
 }
 
-function zEFW(efw,g){
+function zEFW(efw, g){
+
+  if(!isFinite(efw) || efw <= 0) return NaN;
 
   const L = lambdaEFW(g);
   const M = muEFW(g);
@@ -264,7 +266,7 @@ function zEFW(efw,g){
     return (Y - M) / S;
   }
 
-  return (Math.pow((Y - M)/S * L + 1, 1/L) - 1) / L;
+  return (Math.pow(Y / M, L) - 1) / (L * S);
 }
 
 /* ===============================
@@ -282,11 +284,17 @@ function paint(box,p,z){
 
 function analyze(){
 
-  const w=parseInt(weeks.value);
-  const d=parseInt(days.value)||0;
-  if(isNaN(w)||isNaN(d)) return;
+const wRaw = parseInt(weeks.value);
+const dRaw = parseInt(days.value);
 
-  const g=gaInWeeks(w,d);
+if (isNaN(wRaw)) return;
+
+const w = wRaw;
+const d = isNaN(dRaw) ? 0 : dRaw;
+
+const g = gaInWeeks(w, d);
+
+if (!isFinite(g)) return;
 
   function compute(val,meanFn,sdFn,res){
     if(!val){res.innerText="";return;}
